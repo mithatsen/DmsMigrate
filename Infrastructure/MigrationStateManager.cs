@@ -26,7 +26,7 @@ public class MigrationStateManager
             {
                 FilePath = filePath,
                 Status = status,
-                LastUpdated = DateTime.Now,
+                LastUpdated = DateTime.UtcNow,
                 ErrorMessage = errorMessage,
                 RetryCount = 0
             };
@@ -41,7 +41,7 @@ public class MigrationStateManager
             }
             
             state.Status = status;
-            state.LastUpdated = DateTime.Now;
+            state.LastUpdated = DateTime.UtcNow;
             state.ErrorMessage = errorMessage;
         }
 
@@ -131,7 +131,7 @@ public class MigrationStateManager
                 {
                     FilePath = file,
                     Status = MigrationStatus.Pending,
-                    LastUpdated = DateTime.Now,
+                    LastUpdated = DateTime.UtcNow,
                     RetryCount = 0
                 };
             }

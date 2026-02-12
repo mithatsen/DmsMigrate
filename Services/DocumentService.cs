@@ -28,7 +28,7 @@ public class DocumentService : IDocumentService
             Size = metadata.Size,
             TypeId = metadata.TypeId,
             CurrentVersion = 1,
-            CreationTime = DateTime.Now,
+            CreationTime = DateTime.UtcNow,
             CreatorUserId = creatorUserId,
             IsDeleted = false,
             TenantId = tenantId
@@ -50,7 +50,7 @@ public class DocumentService : IDocumentService
             FileName = metadata.FileName,
             Path = metadata.FilePath,
             Size = metadata.Size,
-            CreationTime = DateTime.Now,
+            CreationTime = DateTime.UtcNow,
             CreatorUserId = creatorUserId
         };
 
@@ -68,7 +68,7 @@ public class DocumentService : IDocumentService
             DocumentId = documentId,
             IndexKey = kvp.Key,
             IndexValue = kvp.Value,
-            CreationTime = DateTime.Now
+            CreationTime = DateTime.UtcNow
         }).ToList();
 
         _context.DmsDocumentIndexes.AddRange(indexEntities);
