@@ -1,4 +1,5 @@
 using DMSMigration.Data;
+using DMSMigration.Data.Repositories;
 using DMSMigration.Infrastructure;
 using DMSMigration.Services;
 using DMSMigration.Services.Interfaces;
@@ -33,6 +34,9 @@ class Program
                     services.AddDbContext<ApplicationDbContext>(options =>
                         options.UseOracle(connectionString));
 
+                    // Add Dapper repository (performanslı DB işlemleri için)
+                    services.AddScoped<IDapperDocumentRepository, DapperDocumentRepository>();
+
                     // Add services
                     services.AddSingleton<IConfiguration>(configuration);
                     services.AddScoped<IFileService, FileService>();
@@ -66,7 +70,7 @@ class Program
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Fatal error: {ex.Message}");
+            Console.WriteLine($"Kritik hata: {ex.Message}");
             Console.WriteLine(ex.StackTrace);
             return 1;
         }
@@ -96,16 +100,19 @@ class Program
 
         // Print results
         Console.WriteLine();
-        Console.WriteLine("=== Migration Sonuçları ===");
-        Console.WriteLine($"✓ Başarılı: {result.SuccessCount}");
-        Console.WriteLine($"✗ Hatalı: {result.FailedCount}");
-        
+        Console.WriteLine("===========================================");
+        Console.WriteLine("  MIGRATION SONUÇLARI");
+        Console.WriteLine("===========================================");
+        Console.WriteLine($"[+] Başarılı : {result.SuccessCount}");
+        Console.WriteLine($"[-] Hatalı  : {result.FailedCount}");
+
         if (result.SkippedCount > 0)
         {
-            Console.WriteLine($"⊘ Atlanan: {result.SkippedCount}");
+            Console.WriteLine($"[~] Atlanan : {result.SkippedCount}");
         }
-        
-        Console.WriteLine($"⏱ Süre: {result.Duration:hh\\:mm\\:ss}");
+
+        Console.WriteLine($"Toplam Süre: {result.Duration:hh\\:mm\\:ss}");
+        Console.WriteLine("===========================================");
 
         if (result.Errors.Any())
         {

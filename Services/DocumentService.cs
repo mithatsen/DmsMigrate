@@ -1,6 +1,7 @@
 using DMSMigration.Core.Entities;
 using DMSMigration.Core.Models;
 using DMSMigration.Data;
+using DMSMigration.Data.Repositories;
 using DMSMigration.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -10,11 +11,17 @@ namespace DMSMigration.Services;
 public class DocumentService : IDocumentService
 {
     private readonly ApplicationDbContext _context;
+    private readonly IDapperDocumentRepository _dapperRepository;
     private readonly ILogger<DocumentService> _logger;
+    private readonly Dictionary<string, int> _indexCache = new();
 
-    public DocumentService(ApplicationDbContext context, ILogger<DocumentService> logger)
+    public DocumentService(
+        ApplicationDbContext context,
+        IDapperDocumentRepository dapperRepository,
+        ILogger<DocumentService> logger)
     {
         _context = context;
+        _dapperRepository = dapperRepository;
         _logger = logger;
     }
 
@@ -30,55 +37,82 @@ public class DocumentService : IDocumentService
             CurrentVersion = 1,
             CreationTime = DateTime.UtcNow,
             CreatorUserId = creatorUserId,
-            IsDeleted = false,
+            IsDeleted = 0,
             TenantId = tenantId
         };
 
-        _context.DmsDocuments.Add(document);
-        await _context.SaveChangesAsync();
+        // Dapper kullanarak performanslı insert
+        document.Id = await _dapperRepository.InsertDocumentAsync(document);
 
-        _logger.LogDebug("Document created: {FileName} (ID: {Id})", document.FileName, document.Id);
+        _logger.LogDebug("Doküman oluşturuldu: {FileName} (ID: {Id})", document.FileName, document.Id);
         return document;
     }
 
-    public async Task<DmsDocumentVersion> CreateDocumentVersionAsync(int documentId, FileMetadata metadata, long? creatorUserId)
+    public async Task CreateDocumentIndexesAsync(int documentId, Dictionary<string, string> indexes, int? tenantId, long? creatorUserId)
     {
-        var version = new DmsDocumentVersion
+        if (!indexes.Any()) return;
+
+        var indexEntities = new List<DmsDocumentIndex>();
+
+        foreach (var kvp in indexes)
         {
-            DocumentId = documentId,
-            VersionNumber = 1,
-            FileName = metadata.FileName,
-            Path = metadata.FilePath,
-            Size = metadata.Size,
-            CreationTime = DateTime.UtcNow,
-            CreatorUserId = creatorUserId
-        };
+            // Index tanımını bul veya oluştur
+            var indexId = await GetOrCreateIndexDefinitionAsync(kvp.Key, tenantId, creatorUserId);
 
-        _context.DmsDocumentVersions.Add(version);
-        await _context.SaveChangesAsync();
+            indexEntities.Add(new DmsDocumentIndex
+            {
+                DocumentId = documentId,
+                IndexId = indexId,
+                Value = kvp.Value,
+                CreationTime = DateTime.UtcNow,
+                CreatorUserId = creatorUserId,
+                IsDeleted = 0,
+                TenantId = tenantId
+            });
+        }
 
-        _logger.LogDebug("Document version created: {FileName} (Version: {Version})", version.FileName, version.VersionNumber);
-        return version;
-    }
+        // Dapper kullanarak performanslı bulk insert
+        await _dapperRepository.InsertDocumentIndexesAsync(indexEntities);
 
-    public async Task CreateDocumentIndexesAsync(int documentId, Dictionary<string, string> indexes)
-    {
-        var indexEntities = indexes.Select(kvp => new DmsDocumentIndex
-        {
-            DocumentId = documentId,
-            IndexKey = kvp.Key,
-            IndexValue = kvp.Value,
-            CreationTime = DateTime.UtcNow
-        }).ToList();
-
-        _context.DmsDocumentIndexes.AddRange(indexEntities);
-        await _context.SaveChangesAsync();
-
-        _logger.LogDebug("Created {Count} indexes for document {DocumentId}", indexEntities.Count, documentId);
+        _logger.LogDebug("Doküman için {Count} index oluşturuldu: {DocumentId}", indexEntities.Count, documentId);
     }
 
     public async Task<bool> DocumentExistsAsync(string fileName)
     {
-        return await _context.DmsDocuments.AnyAsync(d => d.FileName == fileName);
+        // Dapper kullanarak performanslı sorgu
+        return await _dapperRepository.DocumentExistsAsync(fileName);
+    }
+
+    public async Task<int> GetOrCreateIndexDefinitionAsync(string key, int? tenantId, long? creatorUserId)
+    {
+        // Cache'den kontrol et
+        if (_indexCache.TryGetValue(key, out var cachedId))
+        {
+            return cachedId;
+        }
+
+        // DB'den kontrol et
+        var existingIndex = await _dapperRepository.GetIndexByKeyAsync(key);
+        if (existingIndex != null)
+        {
+            _indexCache[key] = existingIndex.Id;
+            return existingIndex.Id;
+        }
+
+        // Yeni index tanımı oluştur
+        var newIndex = new DmsIndex
+        {
+            Key = key,
+            CreationTime = DateTime.UtcNow,
+            CreatorUserId = creatorUserId,
+            IsDeleted = 0,
+            TenantId = tenantId
+        };
+
+        var indexId = await _dapperRepository.InsertIndexAsync(newIndex);
+        _indexCache[key] = indexId;
+
+        _logger.LogDebug("Yeni index tanımı oluşturuldu: {Key} (ID: {Id})", key, indexId);
+        return indexId;
     }
 }

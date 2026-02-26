@@ -16,21 +16,21 @@ public class FileService : IFileService
     public async Task<FileMetadata> GetFileMetadataAsync(string filePath)
     {
         var fileInfo = new FileInfo(filePath);
-        
+
         if (!fileInfo.Exists)
         {
-            throw new FileNotFoundException($"File not found: {filePath}");
+            throw new FileNotFoundException($"Dosya bulunamadı: {filePath}");
         }
 
-        return await Task.FromResult(new FileMetadata
+        return new FileMetadata
         {
-            FilePath = filePath,
-            FileName = fileInfo.Name,
-            Extension = fileInfo.Extension,
+            FilePath = Path.GetFileName(fileInfo.Name),  
+            FileName = Path.GetFileNameWithoutExtension(fileInfo.Name),
+            Extension = fileInfo.Extension.TrimStart('.'),
             Size = fileInfo.Length,
-            CreationTime = fileInfo.CreationTime,
-            LastModificationTime = fileInfo.LastWriteTime
-        });
+            CreationTime = DateTime.Now,
+            LastModificationTime = DateTime.Now
+        };
     }
 
     public async Task<string> CopyFileToTargetAsync(string sourceFilePath, string targetDirectory)
@@ -49,7 +49,7 @@ public class FileService : IFileService
             var nameWithoutExtension = Path.GetFileNameWithoutExtension(fileName);
             var extension = Path.GetExtension(fileName);
             var counter = 1;
-            
+
             do
             {
                 fileName = $"{nameWithoutExtension}_{counter}{extension}";
@@ -57,11 +57,11 @@ public class FileService : IFileService
                 counter++;
             } while (File.Exists(targetPath));
 
-            _logger.LogWarning("Duplicate file found. Renamed to: {FileName}", fileName);
+            _logger.LogWarning("Duplicate dosya bulundu. Yeni adı: {FileName}", fileName);
         }
 
         await Task.Run(() => File.Copy(sourceFilePath, targetPath));
-        _logger.LogDebug("File copied: {Source} -> {Target}", sourceFilePath, targetPath);
+        _logger.LogDebug("Dosya kopyalandı: {Source} -> {Target}", sourceFilePath, targetPath);
 
         return targetPath;
     }
@@ -75,7 +75,7 @@ public class FileService : IFileService
     {
         if (!Directory.Exists(directory))
         {
-            _logger.LogWarning("Source directory does not exist: {Directory}", directory);
+            _logger.LogWarning("Kaynak dizin mevcut değil: {Directory}", directory);
             return new List<string>();
         }
 
@@ -84,7 +84,7 @@ public class FileService : IFileService
             .Where(f => supportedExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
             .ToList();
 
-        _logger.LogInformation("Found {Count} files in {Directory}", filteredFiles.Count, directory);
+        _logger.LogInformation("{Directory} dizininde {Count} dosya bulundu", filteredFiles.Count, directory);
         return filteredFiles;
     }
 }

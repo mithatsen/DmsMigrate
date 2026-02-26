@@ -1,17 +1,23 @@
-# DMS Migration Console Application
+# 🚀 DMS Migration - Enterprise File Migration Tool
 
-.NET 9 konsol uygulaması ile DMS (Document Management System) dosya migration aracı.
+**4 TB+ dosya setlerini yüksek performansla taşıyan ve Oracle veritabanına metadata kaydeden .NET 9 uygulaması.**
 
-## Özellikler
+[![.NET](https://img.shields.io/badge/.NET-9.0-purple)](https://dotnet.microsoft.com/)
+[![Oracle](https://img.shields.io/badge/Oracle-Database-red)](https://www.oracle.com/database/)
+[![Dapper](https://img.shields.io/badge/Dapper-ORM-blue)](https://github.com/DapperLib/Dapper)
 
-- ✅ 3 çalışma modu (sıfırdan, hatalıları tekrar, kaldığı yerden)
-- ✅ Template sistem (KOF ve Default)
-- ✅ Batch işleme (varsayılan: 100 dosya/batch)
-- ✅ State management (JSON tabanlı durum takibi)
-- ✅ Detaylı loglama (Console + File)
-- ✅ Hata yönetimi ve retry mekanizması
-- ✅ Oracle veritabanı desteği
-- ✅ Duplicate dosya yönetimi
+## ✨ Özellikler
+
+- ✅ **Yüksek Performans**: Dapper ile optimize edilmiş DB işlemleri
+- ✅ **4 TB+ Destek**: Büyük dosya setleri için özel olarak tasarlandı
+- ✅ **State Management**: Kaldığı yerden devam edebilme
+- ✅ **Batch Processing**: Bellek dostu toplu işleme
+- ✅ **Retry Mechanism**: Otomatik hata yönetimi ve tekrar deneme
+- ✅ **Template System**: Dosya tipine göre özelleştirilebilir metadata (KOF ve Default)
+- ✅ **Transaction Safety**: Veri bütünlüğü garantisi
+- ✅ **Detailed Logging**: Kapsamlı log kayıtları
+- ✅ **Oracle Database**: Enterprise-grade veritabanı desteği
+- ✅ **Duplicate Management**: Duplicate dosya yönetimi
 
 ## Proje Yapısı
 

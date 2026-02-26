@@ -1,11 +1,13 @@
 namespace DMSMigration.Core.Entities;
 
-public class DmsDocumentIndex
+public class DmsDocumentType
 {
     public int Id { get; set; }
-    public string Value { get; set; } = string.Empty;
-    public int DocumentId { get; set; }
-    public int IndexId { get; set; }
+    public string? Key { get; set; }
+    public string? Name { get; set; }
+    public int IsSystem { get; set; }
+    public int HasMultipleDocument { get; set; }
+    public int? ParentId { get; set; }
     public DateTime CreationTime { get; set; }
     public long? CreatorUserId { get; set; }
     public DateTime? LastModificationTime { get; set; }
@@ -14,7 +16,7 @@ public class DmsDocumentIndex
     public long? DeleterUserId { get; set; }
     public DateTime? DeletionTime { get; set; }
     public int? TenantId { get; set; }
+    public int IsDeletable { get; set; }
 
-    public DmsDocument Document { get; set; } = null!;
-    public DmsIndex Index { get; set; } = null!;
+    public ICollection<DmsDocument> Documents { get; set; } = new List<DmsDocument>();
 }

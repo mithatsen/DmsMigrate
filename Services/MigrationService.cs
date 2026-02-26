@@ -16,6 +16,7 @@ public class MigrationService : IMigrationService
     private readonly IConfiguration _configuration;
     private readonly ILogger<MigrationService> _logger;
     private readonly List<ITemplateService> _templateServices;
+    private readonly PerformanceMonitor _performanceMonitor;
 
     public MigrationService(
         IFileService fileService,
@@ -31,11 +32,12 @@ public class MigrationService : IMigrationService
         _configuration = configuration;
         _logger = logger;
         _templateServices = templateServices.ToList();
+        _performanceMonitor = new PerformanceMonitor();
     }
 
     public async Task<MigrationResult> StartFromBeginningAsync()
     {
-        _logger.LogInformation("Starting migration from beginning...");
+        _logger.LogInformation("Migration baştan başlatılıyor...");
         _stateManager.Reset();
 
         var sourcePath = _configuration["MigrationSettings:SourcePath"] 
@@ -51,24 +53,24 @@ public class MigrationService : IMigrationService
 
     public async Task<MigrationResult> RetryFailedAsync()
     {
-        _logger.LogInformation("Retrying failed migrations...");
+        _logger.LogInformation("Hatalı dosyalar yeniden deneniyor...");
         
         var failedFiles = _stateManager.GetFailedFiles();
         var filePaths = failedFiles.Select(f => f.FilePath).ToList();
 
-        _logger.LogInformation("Found {Count} failed files to retry", filePaths.Count);
+        _logger.LogInformation("Yeniden denenecek {Count} hatalı dosya bulundu", filePaths.Count);
 
         return await ExecuteMigrationAsync(filePaths);
     }
 
     public async Task<MigrationResult> ResumeAsync()
     {
-        _logger.LogInformation("Resuming migration from last checkpoint...");
+        _logger.LogInformation("Migration kaldığı yerden devam ettiriliyor...");
         
         var pendingFiles = _stateManager.GetPendingFiles();
         var filePaths = pendingFiles.Select(f => f.FilePath).ToList();
 
-        _logger.LogInformation("Found {Count} pending files to process", filePaths.Count);
+        _logger.LogInformation("İşlenecek {Count} bekleyen dosya bulundu", filePaths.Count);
 
         return await ExecuteMigrationAsync(filePaths);
     }
@@ -83,28 +85,60 @@ public class MigrationService : IMigrationService
 
         var batchSize = _configuration.GetValue<int>("MigrationSettings:BatchSize", 100);
         var targetPath = _configuration["MigrationSettings:TargetPath"] 
-            ?? throw new InvalidOperationException("TargetPath not configured");
+            ?? throw new InvalidOperationException("TargetPath yapılandırılmamış");
         var maxRetryCount = _configuration.GetValue<int>("MigrationSettings:MaxRetryCount", 3);
         var defaultTenantId = _configuration.GetValue<int?>("MigrationSettings:DefaultTenantId");
         var defaultCreatorUserId = _configuration.GetValue<long?>("MigrationSettings:DefaultCreatorUserId");
+
+        Console.WriteLine();
+        Console.WriteLine("===========================================");
+        Console.WriteLine("  DMS MIGRATION BAŞLATILIYOR");
+        Console.WriteLine("===========================================");
+        Console.WriteLine($"Kaynak      : {_configuration["MigrationSettings:SourcePath"]}");
+        Console.WriteLine($"Hedef       : {targetPath}");
+        Console.WriteLine($"Toplam Dosya: {files.Count:N0}");
+        Console.WriteLine($"Batch Boyutu: {batchSize}");
+        Console.WriteLine("===========================================");
+        Console.WriteLine();
 
         _logger.LogInformation("DMS Migration başlatılıyor...");
         _logger.LogInformation("Toplam {TotalFiles} dosya bulundu, {ProcessCount} dosya işlenecek", 
             files.Count, files.Count);
 
+        // Performance monitoring başlat
+        _performanceMonitor.Start(files.Count);
+
         for (int i = 0; i < files.Count; i += batchSize)
         {
             var batch = files.Skip(i).Take(batchSize).ToList();
-            await ProcessBatchAsync(batch, targetPath, maxRetryCount, defaultTenantId, defaultCreatorUserId, result);
 
+            _performanceMonitor.StartBatch();
+            await ProcessBatchAsync(batch, targetPath, maxRetryCount, defaultTenantId, defaultCreatorUserId, result);
+            _performanceMonitor.EndBatch(batch.Count);
+
+            // Her 5 batch'te bir ilerleme raporu (console'a)
+            if ((i / batchSize) % 5 == 0 || i + batchSize >= files.Count)
+            {
+                _performanceMonitor.PrintProgress();
+            }
+
+            // Her batch sonrası log (sadece log dosyasına)
             _logger.LogInformation("İlerleme: {Processed}/{Total} dosya işlendi", 
                 Math.Min(i + batchSize, files.Count), files.Count);
         }
 
         stopwatch.Stop();
         result.Duration = stopwatch.Elapsed;
+        _performanceMonitor.Stop();
 
-        _logger.LogInformation("Migration completed in {Duration}", result.Duration);
+        // Final özet (console'a)
+        Console.WriteLine();
+        Console.WriteLine("===========================================");
+        Console.WriteLine("  MIGRATION TAMAMLANDI");
+        Console.WriteLine("===========================================");
+        _performanceMonitor.PrintProgress();
+
+        _logger.LogInformation("Migration tamamlandı, süre: {Duration}", result.Duration);
         return result;
     }
 
@@ -124,8 +158,8 @@ public class MigrationService : IMigrationService
                 var state = _stateManager.GetFileState(filePath);
                 if (state != null && state.RetryCount >= maxRetryCount)
                 {
-                    _logger.LogWarning("Max retry count reached for {FilePath}. Skipping.", filePath);
-                    _stateManager.UpdateFileStatus(filePath, MigrationStatus.Skipped, "Max retry count exceeded");
+                    _logger.LogWarning("{FilePath} için maksimum deneme sayısına ulaşıldı. Atlanıyor.", filePath);
+                    _stateManager.UpdateFileStatus(filePath, MigrationStatus.Skipped, "Maksimum deneme sayısı aşıldı");
                     result.SkippedCount++;
                     continue;
                 }
@@ -143,32 +177,31 @@ public class MigrationService : IMigrationService
                 var exists = await _documentService.DocumentExistsAsync(metadata.FileName);
                 if (exists)
                 {
-                    _logger.LogWarning("Duplicate document found: {FileName}. Continuing with unique name.", 
+                    _logger.LogWarning("Duplicate doküman bulundu: {FileName}. Benzersiz adla devam ediliyor.", 
                         metadata.FileName);
                 }
 
                 // Step 4: Copy file to target
                 var targetFilePath = await _fileService.CopyFileToTargetAsync(filePath, targetPath);
-                metadata.FilePath = targetFilePath;
+     
+                metadata.FilePath = Path.GetFileName(targetFilePath);
+                metadata.FileName = Path.GetFileNameWithoutExtension(targetFilePath);
 
                 // Step 5: Create document record
                 var document = await _documentService.CreateDocumentAsync(metadata, tenantId, creatorUserId);
 
-                // Step 6: Create version record
-                await _documentService.CreateDocumentVersionAsync(document.Id, metadata, creatorUserId);
+                // Step 6: Create index records
+                await _documentService.CreateDocumentIndexesAsync(document.Id, metadata.Indexes, tenantId, creatorUserId);
 
-                // Step 7: Create index records
-                await _documentService.CreateDocumentIndexesAsync(document.Id, metadata.Indexes);
-
-                // Step 8: Update state
+                // Step 7: Update state
                 _stateManager.UpdateFileStatus(filePath, MigrationStatus.Success);
                 result.SuccessCount++;
 
-                _logger.LogInformation("✓ Başarılı: {FileName} (ID: {Id})", metadata.FileName, document.Id);
+                _logger.LogInformation("[OK] Başarılı: {FileName} (ID: {Id})", metadata.FileName, document.Id);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "✗ Hata: {FilePath}", filePath);
+                _logger.LogError(ex, "[HATA] {FilePath}", filePath);
                 _stateManager.UpdateFileStatus(filePath, MigrationStatus.Failed, ex.Message);
                 result.FailedCount++;
                 result.Errors.Add($"{filePath}: {ex.Message}");
