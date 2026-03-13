@@ -81,12 +81,12 @@ public class DapperDocumentRepository : IDapperDocumentRepository
         _logger.LogDebug("{Count} index eklendi", indexes.Count());
     }
 
-    public async Task<bool> DocumentExistsAsync(string fileName)
+    public async Task<bool> DocumentExistsAsync(string fileName, string extension)
     {
-        const string sql = "SELECT COUNT(1) FROM DMS_DOCUMENT WHERE FILE_NAME = :FileName AND IS_DELETED = 0";
+        const string sql = "SELECT COUNT(1) FROM DMS_DOCUMENT WHERE FILE_NAME = :FileName AND EXTENSION = :Extension AND IS_DELETED = 0";
 
         using var connection = CreateConnection();
-        var count = await connection.ExecuteScalarAsync<int>(sql, new { FileName = fileName });
+        var count = await connection.ExecuteScalarAsync<int>(sql, new { FileName = fileName, Extension = extension });
 
         return count > 0;
     }
@@ -223,5 +223,117 @@ public class DapperDocumentRepository : IDapperDocumentRepository
             _logger.LogError(ex, "Toplu index ekleme sırasında hata");
             throw;
         }
+    }
+
+    public async Task<ProjeDetay?> GetProjeDetayByProjeNoAsync(string projeNo)
+    {
+        const string sql = @"
+            SELECT 
+                p.ID AS ProjeId,
+                t.ID AS TeklifId,
+                t.MUSTERI_ID AS MusteriId,
+                k.ID AS KrediId
+            FROM PRJ_PROJE p
+            INNER JOIN STS_TEKLIF t ON t.PROJE_ID = p.ID
+            INNER JOIN KRD_KREDI_BILGILERI k ON k.TEKLIF_ID = t.ID
+            WHERE p.NO = :ProjeNo
+            AND ROWNUM = 1";
+
+        using var connection = CreateConnection();
+
+        try
+        {
+            var result = await connection.QueryFirstOrDefaultAsync<ProjeDetay>(sql, new { ProjeNo = projeNo });
+
+            if (result != null)
+            {
+                _logger.LogDebug("ProjeNo {ProjeNo} için detay bulundu: KrediId={KrediId}, TeklifId={TeklifId}, MusteriId={MusteriId}", 
+                    projeNo, result.KrediId, result.TeklifId, result.MusteriId);
+            }
+            else
+            {
+                _logger.LogWarning("ProjeNo {ProjeNo} için proje detay bulunamadı", projeNo);
+            }
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ProjeNo {ProjeNo} için detay sorgulanırken hata", projeNo);
+            return null;
+        }
+    }
+
+    public async Task<int?> GetTypeIdByKeyAsync(string typeKey)
+    {
+        const string sql = @"
+            SELECT ID 
+            FROM DMS_DOCUMENT_TYPE 
+            WHERE KEY = :TypeKey 
+            AND IS_DELETED = 0
+            AND ROWNUM = 1";
+
+        using var connection = CreateConnection();
+
+        try
+        {
+            var typeId = await connection.QueryFirstOrDefaultAsync<int?>(sql, new { TypeKey = typeKey });
+
+            if (typeId.HasValue)
+            {
+                _logger.LogDebug("TypeKey {TypeKey} için TypeId bulundu: {TypeId}", typeKey, typeId.Value);
+            }
+            else
+            {
+                _logger.LogWarning("TypeKey {TypeKey} için DMS_TYPE kaydı bulunamadı", typeKey);
+            }
+
+            return typeId;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "TypeKey {TypeKey} için TypeId sorgulanırken hata", typeKey);
+            return null;
+        }
+    }
+
+    public async Task<int> InsertDocumentVersionAsync(DmsDocumentVersion version)
+    {
+        const string sql = @"
+            INSERT INTO DMS_DOCUMENT_VERSION 
+            (NO, FILE_NAME, EXTENSION, ""PATH"", ""SIZE"", DOCUMENT_ID, CREATION_TIME, 
+             CREATOR_USER_ID, LAST_MODIFICATION_TIME, LAST_MODIFIER_USER_ID, 
+             IS_DELETED, DELETER_USER_ID, DELETION_TIME, TENANT_ID)
+            VALUES 
+            (:No, :FileName, :Extension, :Path, :Size, :DocumentId, :CreationTime,
+             :CreatorUserId, :LastModificationTime, :LastModifierUserId,
+             :IsDeleted, :DeleterUserId, :DeletionTime, :TenantId)
+            RETURNING ID INTO :Id";
+
+        using var connection = CreateConnection();
+
+        var parameters = new DynamicParameters();
+        parameters.Add("No", version.No);
+        parameters.Add("FileName", version.FileName);
+        parameters.Add("Extension", version.Extension);
+        parameters.Add("Path", version.Path);
+        parameters.Add("Size", version.Size);
+        parameters.Add("DocumentId", version.DocumentId);
+        parameters.Add("CreationTime", version.CreationTime);
+        parameters.Add("CreatorUserId", version.CreatorUserId);
+        parameters.Add("LastModificationTime", version.LastModificationTime);
+        parameters.Add("LastModifierUserId", version.LastModifierUserId);
+        parameters.Add("IsDeleted", version.IsDeleted);
+        parameters.Add("DeleterUserId", version.DeleterUserId);
+        parameters.Add("DeletionTime", version.DeletionTime);
+        parameters.Add("TenantId", version.TenantId);
+        parameters.Add("Id", dbType: DbType.Int32, direction: ParameterDirection.Output);
+
+        await connection.ExecuteAsync(sql, parameters);
+
+        var id = parameters.Get<int>("Id");
+        _logger.LogDebug("Doküman versiyonu eklendi, ID: {Id}, Version: {VersionNo}", id, version.No);
+
+        return id;
     }
 }

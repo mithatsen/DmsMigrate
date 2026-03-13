@@ -7,6 +7,7 @@ public interface IDocumentService
 {
     Task<DmsDocument> CreateDocumentAsync(FileMetadata metadata, int? tenantId, long? creatorUserId);
     Task CreateDocumentIndexesAsync(int documentId, Dictionary<string, string> indexes, int? tenantId, long? creatorUserId);
-    Task<bool> DocumentExistsAsync(string fileName);
+    Task<bool> DocumentExistsAsync(string fileName, string extension);
     Task<int> GetOrCreateIndexDefinitionAsync(string key, int? tenantId, long? creatorUserId);
+    Task<DmsDocumentVersion> CreateDocumentVersionAsync(DmsDocument document, int? tenantId, long? creatorUserId);
 }

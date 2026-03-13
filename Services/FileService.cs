@@ -43,21 +43,11 @@ public class FileService : IFileService
         var fileName = Path.GetFileName(sourceFilePath);
         var targetPath = Path.Combine(targetDirectory, fileName);
 
-        // Handle duplicates by adding a unique suffix
+        // Dosya zaten varsa kopyalama, mevcut path'i dön
         if (File.Exists(targetPath))
         {
-            var nameWithoutExtension = Path.GetFileNameWithoutExtension(fileName);
-            var extension = Path.GetExtension(fileName);
-            var counter = 1;
-
-            do
-            {
-                fileName = $"{nameWithoutExtension}_{counter}{extension}";
-                targetPath = Path.Combine(targetDirectory, fileName);
-                counter++;
-            } while (File.Exists(targetPath));
-
-            _logger.LogWarning("Duplicate dosya bulundu. Yeni adı: {FileName}", fileName);
+            _logger.LogDebug("Dosya zaten mevcut, kopyalanmıyor: {FileName}", fileName);
+            return targetPath;
         }
 
         await Task.Run(() => File.Copy(sourceFilePath, targetPath));
@@ -84,7 +74,7 @@ public class FileService : IFileService
             .Where(f => supportedExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
             .ToList();
 
-        _logger.LogInformation("{Directory} dizininde {Count} dosya bulundu", filteredFiles.Count, directory);
+        _logger.LogInformation("{Directory} dizininde {Count} dosya bulundu", directory, filteredFiles.Count );
         return filteredFiles;
     }
 }

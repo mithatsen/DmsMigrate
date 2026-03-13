@@ -179,68 +179,31 @@ Seçiminiz:
 
 Yeni bir template eklemek için:
 
-1. `ITemplateService` interface'ini implement edin
-2. `CanHandle` metodunda dosya adı kontrolü yapın
-3. `EnrichMetadata` metodunda TypeId ve Index'leri set edin
-4. `Program.cs` içinde DI container'a ekleyin
+1. `BaseTemplateService` sınıfından türetin
+2. `FolderName` property'sini override edin
+3. `CanHandle` metodunu gerekirse override edin (özel koşullar için)
+4. `GetIndexesAsync` metodunu implement edin (dosya adından index'leri çıkarın)
+5. `Extensions/ServiceCollectionExtensions.cs` içinde DI container'a ekleyin
 
 ```csharp
-public class CustomTemplateService : ITemplateService
+public class CustomTemplateService : BaseTemplateService
 {
-    public bool CanHandle(string fileName)
+    public override string FolderName => "Custom Folder";
+
+    public CustomTemplateService(ILogger<CustomTemplateService> logger) : base(logger)
     {
-        return fileName.StartsWith("CUSTOM_");
     }
 
-    public void EnrichMetadata(FileMetadata metadata)
+    protected override Task<Dictionary<string, string>> GetIndexesAsync(string fileName)
     {
-        metadata.TypeId = 2;
-        metadata.Indexes["CustomKey"] = "CustomValue";
+        return Task.FromResult(new Dictionary<string, string>
+        {
+            ["DocumentType"] = "CustomType",
+            ["CustomKey"] = "CustomValue"
+        });
     }
 }
 ```
-
-## Veritabanı Şeması
-
-### DMS_DOCUMENT
-| Column | Type | Description |
-|--------|------|-------------|
-| ID | NUMBER(10) | Primary Key |
-| FILE_NAME | NVARCHAR2(500) | Dosya adı |
-| EXTENSION | NVARCHAR2(500) | Dosya uzantısı |
-| PATH | NVARCHAR2(500) | Dosya yolu |
-| SIZE | NUMBER(19) | Dosya boyutu (byte) |
-| TYPE_ID | NUMBER(10) | Döküman tipi |
-| CURRENT_VERSION | NUMBER(10) | Güncel versiyon |
-| CREATION_TIME | TIMESTAMP(7) | Oluşturulma zamanı |
-| CREATOR_USER_ID | NUMBER(19) | Oluşturan kullanıcı |
-| LAST_MODIFICATION_TIME | TIMESTAMP(7) | Son değişiklik zamanı |
-| LAST_MODIFIER_USER_ID | NUMBER(19) | Son değiştiren kullanıcı |
-| IS_DELETED | NUMBER(1) | Silinmiş mi? |
-| DELETER_USER_ID | NUMBER(19) | Silen kullanıcı |
-| DELETION_TIME | TIMESTAMP(7) | Silinme zamanı |
-| TENANT_ID | NUMBER(10) | Tenant ID |
-
-### DMS_DOCUMENT_INDEX
-| Column | Type | Description |
-|--------|------|-------------|
-| ID | NUMBER(10) | Primary Key |
-| DOCUMENT_ID | NUMBER(10) | Foreign Key -> DMS_DOCUMENT |
-| INDEX_KEY | NVARCHAR2(100) | Index anahtarı |
-| INDEX_VALUE | NVARCHAR2(500) | Index değeri |
-| CREATION_TIME | TIMESTAMP(7) | Oluşturulma zamanı |
-
-### DMS_DOCUMENT_VERSION
-| Column | Type | Description |
-|--------|------|-------------|
-| ID | NUMBER(10) | Primary Key |
-| DOCUMENT_ID | NUMBER(10) | Foreign Key -> DMS_DOCUMENT |
-| VERSION_NUMBER | NUMBER(10) | Versiyon numarası |
-| FILE_NAME | NVARCHAR2(500) | Dosya adı |
-| PATH | NVARCHAR2(500) | Dosya yolu |
-| SIZE | NUMBER(19) | Dosya boyutu |
-| CREATION_TIME | TIMESTAMP(7) | Oluşturulma zamanı |
-| CREATOR_USER_ID | NUMBER(19) | Oluşturan kullanıcı |
 
 ## State Management
 

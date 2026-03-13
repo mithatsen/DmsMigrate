@@ -37,6 +37,12 @@ public class PerformanceMonitor
         _totalBytesProcessed += fileSize;
     }
 
+    public void RecordSkippedFile()
+    {
+        // Skip edilen dosyalar da "işlendi" sayılır (progress için)
+        _processedFiles++;
+    }
+
     public void EndBatch(int batchSize)
     {
         _batchStopwatch.Stop();

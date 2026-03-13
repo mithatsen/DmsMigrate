@@ -4,6 +4,7 @@ namespace DMSMigration.Services.Interfaces;
 
 public interface ITemplateService
 {
-    bool CanHandle(string fileName);
-    void EnrichMetadata(FileMetadata metadata);
+    string FolderName { get; }
+    bool CanHandle(string filePath);
+    Task ProcessMetadataAsync(FileMetadata metadata);
 }

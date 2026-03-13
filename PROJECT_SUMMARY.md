@@ -39,8 +39,6 @@ DMSMigration/
 │   └── ApplicationDbContext.cs         ✅ EF Core DbContext
 ├── Infrastructure/
 │   └── MigrationStateManager.cs        ✅ State management
-├── Database/
-│   └── CreateSchema.sql                ✅ Oracle schema script
 ├── .gitignore                          ✅ Git ignore file
 ├── README.md                           ✅ Comprehensive documentation
 ├── CONTRIBUTING.md                     ✅ Development guidelines
